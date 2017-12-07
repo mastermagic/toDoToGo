@@ -22,6 +22,36 @@ namespace toDoToGoParser
         {
             InitializeComponent();
         }
+		
+		private void button1_Click(object sender, EventArgs e)
+            {
+            Program.jobList = new List<HabraJob>();
+            Program.wClient = new WebClient();
+
+            Program.wClient.Proxy = null;
+            Program.wClient.Encoding = Program.encode;
+
+                HtmlAgilityPack.HtmlDocument html = new HtmlAgilityPack.HtmlDocument();
+
+                html.LoadHtml(Program.wClient.DownloadString("http://habr.ru/job"));
+            Program.GetJobLinks(html);
+
+                int pagesCount = Program.GetPagesCount(html);
+
+                for (int i = 2; i <= pagesCount; i++)
+                {
+                    html.LoadHtml(Program.wClient.DownloadString(string.Format("http://habrahabr.ru/job/page{0}", i)));
+                Program.GetJobLinks(html);
+                }
+
+                foreach (var job in Program.jobList)
+                {
+                Program.GetFullInfo(job);
+                }
+
+            Program.SerializeToXml(Program.jobList);
+
+            }
 
         public enum Education
         {
@@ -124,45 +154,58 @@ namespace toDoToGoParser
 
             public static List<HabraJob> jobList;
 
-            public static Encoding encode = System.Text.Encoding.GetEncoding("utf-8");
+            public static Encoding encode = Encoding.GetEncoding("utf-8");
 
-            static int GetPagesCount(HtmlAgilityPack.HtmlDocument html)
+            public static int GetPagesCount(HtmlAgilityPack.HtmlDocument html)
             {
-                var liNodes = html.GetElementbyId("nav-pages").ChildNodes.Where(x => x.Name == "li");
+                try
+                {
+                    var liNodes = html.GetElementbyId("nav-pages").ChildNodes.Where(x => x.Name == "li");
 
-                HtmlAttribute href = liNodes.Last().FirstChild.Attributes["href"];
+                    HtmlAttribute href = liNodes.Last().FirstChild.Attributes["href"];
 
-                int pagesCount = (int)Char.GetNumericValue(href.Value[href.Value.Length - 2]);
-
-                return pagesCount;
+                    int pagesCount = (int)Char.GetNumericValue(href.Value[href.Value.Length - 2]);
+                    return pagesCount;
+                }
+                catch (Exception)
+                {
+                }
+                return 0;
             }
 
-            static void GetJobLinks(HtmlAgilityPack.HtmlDocument html)
+            public static void GetJobLinks(HtmlAgilityPack.HtmlDocument html)
             {
-                var trNodes = html.GetElementbyId("job-items").ChildNodes.Where(x => x.Name == "tr");
-
-                foreach (var item in trNodes)
+                try
                 {
-                    var tdNodes = item.ChildNodes.Where(x => x.Name == "td").ToArray();
-                    if (tdNodes.Count() != 0)
+                    var trNodes = html.GetElementbyId("job-items").ChildNodes.Where(x => x.Name == "tr");
+
+                    foreach (var item in trNodes)
                     {
-                        var location = tdNodes[2].ChildNodes.Where(x => x.Name == "a").ToArray();
-
-                        jobList.Add(new HabraJob()
+                        var tdNodes = item.ChildNodes.Where(x => x.Name == "td").ToArray();
+                        if (tdNodes.Count() != 0)
                         {
-                            Url = tdNodes[0].ChildNodes.First().Attributes["href"].Value,
-                            Title = tdNodes[0].FirstChild.InnerText,
-                            Price = tdNodes[1].FirstChild.InnerText,
-                            Country = location[0].InnerText,
-                            Region = location[2].InnerText,
-                            City = location[2].InnerText
-                        });
-                    }
+                            var location = tdNodes[2].ChildNodes.Where(x => x.Name == "a").ToArray();
 
+                            jobList.Add(new HabraJob()
+                            {
+                                Url = tdNodes[0].ChildNodes.First().Attributes["href"].Value,
+                                Title = tdNodes[0].FirstChild.InnerText,
+                                Price = tdNodes[1].FirstChild.InnerText,
+                                Country = location[0].InnerText,
+                                Region = location[2].InnerText,
+                                City = location[2].InnerText
+                            });
+                        }
+
+                    }
+                }
+                catch (Exception)
+                {
+                    return;
                 }
             }
 
-            static void GetFullInfo(HabraJob job)
+            public static void GetFullInfo(HabraJob job)
             {
                 HtmlAgilityPack.HtmlDocument html = new HtmlAgilityPack.HtmlDocument();
                 // html.LoadHtml(wClient.DownloadString(job.Url));
@@ -210,37 +253,7 @@ namespace toDoToGoParser
                     XmlSerializer serializer = new XmlSerializer(typeof(List<HabraJob>));
                     serializer.Serialize(output, jobList);
                 }
-            }
-
-            private void button1_Click(object sender, EventArgs e)
-            {
-                jobList = new List<HabraJob>();
-                wClient = new WebClient();
-
-                wClient.Proxy = null;
-                wClient.Encoding = encode;
-
-                HtmlAgilityPack.HtmlDocument html = new HtmlAgilityPack.HtmlDocument();
-
-                html.LoadHtml(wClient.DownloadString("http://habr.ru/job"));
-                GetJobLinks(html);
-
-                int pagesCount = GetPagesCount(html);
-
-                for (int i = 2; i <= pagesCount; i++)
-                {
-                    html.LoadHtml(wClient.DownloadString(string.Format("http://habrahabr.ru/job/page{0}", i)));
-                    GetJobLinks(html);
-                }
-
-                foreach (var job in jobList)
-                {
-                    GetFullInfo(job);
-                }
-
-                SerializeToXml(jobList);
-
-            }
+            }            
         }
     }
 }
